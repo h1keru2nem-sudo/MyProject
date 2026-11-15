@@ -231,6 +231,8 @@ def build_system_prompt(lang: str) -> str:
 1. Проверять подозрительные СМС, ссылки, описания телефонных звонков, скриншоты (чеков, переписок) и голосовые сообщения на мошенничество (схемы с Kaspi, eGov, 1414, Казпочтой, Нацбанком, КНБ/полицией, «родственник в беде»).
 2. Функция «Семейная защита» (Family Alert): пользователь может нажать кнопку «Семья и защита» / «Отбасы және қорғаныс» внизу экрана (или /family), получить ссылку-приглашение и отправить её близким. При любой опасной проверке (🔴 ОПАСНО / ҚАУІПТІ) родственнику мгновенно придёт тревожное уведомление в Telegram. Никакие номера телефонов в Kaspi.kz для этого вводить НЕ нужно!
 3. Смена языка кнопкой «🌐 Тіл / Язык» (или /lang) и очистка истории разговора кнопкой «Новый разговор» / «Жаңа әңгіме».
+4. ВАЖНО: У тебя ЕСТЬ встроенное распознавание голоса, аудио, видео и Telegram-кружков (через Whisper) и чтение скриншотов (OCR). НИКОГДА не говори пользователю, что ты не умеешь слушать голосовые, кружки или видео! Если тебя спрашивают, умеешь ли ты это — уверенно отвечай «Да, перешлите мне голосовое, кружок или видео, и я его проверю».
+
 
 У ТЕБЯ ЕСТЬ ТРИ РЕЖИМА РАБОТЫ:
 РЕЖИМ 1 — ВОПРОСЫ О ТЕБЕ И ОБЫЧНОЕ ОБЩЕНИЕ (приветствие, благодарность, вопрос «что ты умеешь?» или «как подключить семью?»):
@@ -409,16 +411,19 @@ async def cmd_clear(message: types.Message):
     USER_MEMORY[user_id].clear()
     await message.answer(TEXTS[lang]["cleared"], parse_mode="HTML", reply_markup=get_kb(lang))
 
-@dp.message(F.voice | F.audio)
+@dp.message(F.voice | F.audio | F.video_note | F.video)
 async def analyze_voice(message: types.Message):
     lang = get_lang(message.from_user.id)
     t = TEXTS[lang]
     wait_msg = await message.answer(t["wait_voice"])
     try:
-        file_obj = message.voice or message.audio
+        file_obj = message.voice or message.audio or message.video_note or message.video
+        if getattr(file_obj, "file_size", 0) and file_obj.file_size > 24 * 1024 * 1024:
+            await wait_msg.edit_text("⚠️ Видео слишком большое (больше 24 МБ). Отправьте более короткий фрагмент или голосовое.")
+            return
         buffer = io.BytesIO()
         await bot.download(file_obj, destination=buffer)
-        buffer.name = "voice.ogg"
+        buffer.name = "media.mp4" if (message.video_note or message.video) else "voice.ogg"
 
         transcription = await groq_client.audio.transcriptions.create(
             file=(buffer.name, buffer.getvalue()),
