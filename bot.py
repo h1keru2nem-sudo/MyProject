@@ -1,4 +1,13 @@
 import asyncio
+import re
+
+def fix_tg_html(text: str) -> str:
+    # Переводим **жирный** в <b>жирный</b>
+    text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text, flags=re.DOTALL)
+    # Убираем случайные заголовки ###
+    text = re.sub(r"^#{1,3}\s*", "", text, flags=re.MULTILINE)
+    return text
+
 import io
 import logging
 import os
@@ -311,7 +320,7 @@ async def ask_with_context(user: types.User, new_user_message: str, source_key: 
         temperature=0.3,
         max_tokens=380
     )
-    reply = chat_completion.choices[0].message.content
+    reply = fix_tg_html(chat_completion.choices[0].message.content)
     add_to_history(user.id, "assistant", reply)
 
     await trigger_family_alert_if_needed(user, reply, source_key)
