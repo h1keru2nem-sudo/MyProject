@@ -146,16 +146,19 @@ def init_stats_db():
         conn.execute("INSERT OR IGNORE INTO bot_metrics (key, val) VALUES ('threats_blocked', 0)")
 
 def track_user(user_id: int):
+    init_stats_db()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("INSERT OR IGNORE INTO bot_users (user_id) VALUES (?)", (user_id,))
 
 def track_check(is_threat: bool):
+    init_stats_db()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("UPDATE bot_metrics SET val = val + 1 WHERE key = 'total_checks'")
         if is_threat:
             conn.execute("UPDATE bot_metrics SET val = val + 1 WHERE key = 'threats_blocked'")
 
 def get_portfolio_stats() -> dict:
+    init_stats_db()
     with sqlite3.connect(DB_PATH) as conn:
         users = conn.execute("SELECT COUNT(*) FROM bot_users").fetchone()[0]
         links = conn.execute("SELECT COUNT(*) FROM family_links").fetchone()[0]
