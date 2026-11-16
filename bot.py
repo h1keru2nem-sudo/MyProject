@@ -207,7 +207,7 @@ MEMORY_TTL = 900
 
 def build_system_prompt(lang: str) -> str:
     lang_instruction = (
-        "Отвечай СТРОГО НА КАЗАХСКОМ ЯЗЫКЕ (естественным, уважительным и простым казахским языком, понятным старшему поколению)."
+        "Отвечай СТРОГО НА ГРАМОТНОМ, ЕСТЕСТВЕННОМ КАЗАХСКОМ ЯЗЫКЕ (қазақ тілінде). Понимай разговорный казахский и суржик (шала-қазақша), а также казахские термины мошенников: ЖСН (ИИН), 1414 коды, қауіпсіз шот, Kaspi аударым, Ұлттық банк, ХҚКО (ЦОН). Никогда не переходи на русский, если выбран казахский язык!"
         if lang == "kz"
         else "Отвечай на русском языке (если пользователь сам не написал на казахском — тогда ответь на казахском)."
     )
@@ -282,11 +282,17 @@ async def init_models():
         m for m in all_ids
         if not any(x in m.lower() for x in ["whisper", "tts", "guard", "embed", "orpheus"])
     ]
-    text_candidates = [
-        m for m in chat_models
-        if any(x in m.lower() for x in ["70b", "120b", "scout", "llama", "qwen"])
+    preferred_order = [
+        "llama-3.3-70b-versatile",
+        "qwen/qwen3-32b",
+        "qwen-qwq-32b",
+        "meta-llama/llama-4-maverick-17b-128e-instruct",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
     ]
-    TEXT_MODEL = text_candidates[0] if text_candidates else chat_models[0]
+    TEXT_MODEL = next((m for m in preferred_order if m in all_ids), None)
+    if not TEXT_MODEL:
+        big_models = [m for m in chat_models if any(x in m.lower() for x in ["70b", "qwen", "120b"])]
+        TEXT_MODEL = big_models[0] if big_models else chat_models[0]
     print(f"✅ Бот: @{BOT_USERNAME} | Модель: {TEXT_MODEL}")
 
 def extract_text_from_image(image_bytes: bytes) -> str:
@@ -428,6 +434,7 @@ async def analyze_voice(message: types.Message):
         transcription = await groq_client.audio.transcriptions.create(
             file=(buffer.name, buffer.getvalue()),
             model="whisper-large-v3-turbo",
+            prompt="Сәлеметсіз бе, 1414 коды, Kaspi банк, ақша аудару, ЖСН, қауіпсіз шот, полиция, здравствуйте.",
             response_format="text"
         )
         spoken_text = transcription.strip()
