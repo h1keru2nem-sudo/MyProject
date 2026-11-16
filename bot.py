@@ -137,7 +137,38 @@ TEXTS = {
 }
 
 # --- БАЗА ДАННЫХ (СЕМЬЯ + ЯЗЫК ПОЛЬЗОВАТЕЛЯ) ---
-def init_db():
+
+def init_stats_db():
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("CREATE TABLE IF NOT EXISTS bot_users (user_id INTEGER PRIMARY KEY)")
+        conn.execute("CREATE TABLE IF NOT EXISTS bot_metrics (key TEXT PRIMARY KEY, val INTEGER DEFAULT 0)")
+        conn.execute("INSERT OR IGNORE INTO bot_metrics (key, val) VALUES ('total_checks', 0)")
+        conn.execute("INSERT OR IGNORE INTO bot_metrics (key, val) VALUES ('threats_blocked', 0)")
+
+def track_user(user_id: int):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("INSERT OR IGNORE INTO bot_users (user_id) VALUES (?)", (user_id,))
+
+def track_check(is_threat: bool):
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("UPDATE bot_metrics SET val = val + 1 WHERE key = 'total_checks'")
+        if is_threat:
+            conn.execute("UPDATE bot_metrics SET val = val + 1 WHERE key = 'threats_blocked'")
+
+def get_portfolio_stats() -> dict:
+    with sqlite3.connect(DB_PATH) as conn:
+        users = conn.execute("SELECT COUNT(*) FROM bot_users").fetchone()[0]
+        links = conn.execute("SELECT COUNT(*) FROM family_links").fetchone()[0]
+        rows = dict(conn.execute("SELECT key, val FROM bot_metrics").fetchall())
+    return {
+        "users": users,
+        "links": links,
+        "checks": rows.get("total_checks", 0),
+        "threats": rows.get("threats_blocked", 0)
+    }
+
+def init_db()
+    init_stats_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS family_links (
@@ -330,6 +361,9 @@ async def ask_with_context(user: types.User, new_user_message: str, source_key: 
     )
     reply = fix_tg_html(chat_completion.choices[0].message.content)
     add_to_history(user.id, "assistant", reply)
+    track_user(user.id)
+    is_danger = ("🔴" in reply) or ("ОПАСНО" in reply.upper()) or ("ҚАУІПТІ" in reply.upper())
+    track_check(is_danger)
 
     await trigger_family_alert_if_needed(user, reply, source_key)
     return reply
@@ -337,6 +371,7 @@ async def ask_with_context(user: types.User, new_user_message: str, source_key: 
 # --- ОБРАБОТЧИКИ КОМАНД ---
 @dp.message(CommandStart())
 async def cmd_start(message: types.Message, command: CommandObject):
+    track_user(message.from_user.id)
     user_id = message.from_user.id
     USER_MEMORY[user_id].clear()
     lang = get_lang(user_id)
@@ -500,6 +535,23 @@ async def start_web_server():
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
     print(f"🌐 Health-check сервер запущен на порту {port}")
+
+
+@dp.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    admin_id = os.getenv("ADMIN_ID")
+    if admin_id and str(message.from_user.id) != str(admin_id).strip():
+        return
+    s = get_portfolio_stats()
+    await message.answer(
+        f"📊 <b>Статистика Qalqan AI (для портфолио)</b>\n\n"
+        f"👤 <b>Уникальных пользователей:</b> {s['users']}\n"
+        f"👨‍👩‍👧‍👦 <b>Семейных связок (Family Alert):</b> {s['links']}\n"
+        f"🔍 <b>Всего проверок:</b> {s['checks']}\n"
+        f"🚨 <b>Выявлено угроз (🔴):</b> {s['threats']}\n\n"
+        f"<i>Твой Telegram ID: <code>{message.from_user.id}</code></i>",
+        parse_mode="HTML"
+    )
 
 async def main():
     logging.basicConfig(level=logging.INFO)
