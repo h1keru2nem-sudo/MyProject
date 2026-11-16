@@ -446,6 +446,23 @@ async def cmd_family(message: types.Message):
         reply_markup=get_kb(lang)
     )
 
+@dp.message(Command("stats"))
+async def cmd_stats(message: types.Message):
+    admin_id = os.getenv("ADMIN_ID")
+    if admin_id and str(message.from_user.id) != str(admin_id).strip():
+        return
+    s = get_portfolio_stats()
+    await message.answer(
+        f"📊 <b>Статистика Qalqan AI (для портфолио)</b>\n\n"
+        f"👤 <b>Уникальных пользователей:</b> {s['users']}\n"
+        f"👨‍👩‍👧‍👦 <b>Семейных связок (Family Alert):</b> {s['links']}\n"
+        f"🔍 <b>Всего проверок:</b> {s['checks']}\n"
+        f"🚨 <b>Выявлено угроз (🔴):</b> {s['threats']}\n\n"
+        f"<i>Твой Telegram ID: <code>{message.from_user.id}</code></i>",
+        parse_mode="HTML"
+    )
+
+
 @dp.message(Command("clear"))
 @dp.message(F.text.in_(["🔄 Новый разговор", "🔄 Жаңа әңгіме"]))
 async def cmd_clear(message: types.Message):
@@ -538,22 +555,6 @@ async def start_web_server():
     await site.start()
     print(f"🌐 Health-check сервер запущен на порту {port}")
 
-
-@dp.message(Command("stats"))
-async def cmd_stats(message: types.Message):
-    admin_id = os.getenv("ADMIN_ID")
-    if admin_id and str(message.from_user.id) != str(admin_id).strip():
-        return
-    s = get_portfolio_stats()
-    await message.answer(
-        f"📊 <b>Статистика Qalqan AI (для портфолио)</b>\n\n"
-        f"👤 <b>Уникальных пользователей:</b> {s['users']}\n"
-        f"👨‍👩‍👧‍👦 <b>Семейных связок (Family Alert):</b> {s['links']}\n"
-        f"🔍 <b>Всего проверок:</b> {s['checks']}\n"
-        f"🚨 <b>Выявлено угроз (🔴):</b> {s['threats']}\n\n"
-        f"<i>Твой Telegram ID: <code>{message.from_user.id}</code></i>",
-        parse_mode="HTML"
-    )
 
 async def main():
     logging.basicConfig(level=logging.INFO)
