@@ -167,8 +167,7 @@ def get_portfolio_stats() -> dict:
         "threats": rows.get("threats_blocked", 0)
     }
 
-def init_db()
-    init_stats_db():
+def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS family_links (
